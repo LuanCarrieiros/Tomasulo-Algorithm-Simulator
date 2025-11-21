@@ -1,0 +1,29 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+venv/
+*.egg-info/
+
+# Java
+*.class
+
+# IDEs
+.idea/
+.vscode/
+.claude/
+*.swp
+*.swo
+
+# Sistema
+.DS_Store
+Thumbs.db
+nul
+
+# Temporários
+*.tmp
+*.bak
+*~
