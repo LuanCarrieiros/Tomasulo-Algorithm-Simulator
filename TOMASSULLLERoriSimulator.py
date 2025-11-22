@@ -190,8 +190,7 @@ class TOMASSULLLERoriSimulator:
                                 instr.set_branch_resolved(True)
                                 res = 1.0  # Simboliza branch tomado
                             rs.set_result(res)
-                elif instr.get_start_exec_cycle() == -1 and not rs.is_ready_to_execute():
-                    self.bubble_cycles += 1
+                # Removido: contagem de bolhas por data hazard (comportamento normal do Tomasulo)
 
     def write_result_to_cdb(self):
         self.cdb_producer_tag = None  # Limpa o CDB no início da fase
