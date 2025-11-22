@@ -311,7 +311,7 @@ Este projeto é de código aberto para fins educacionais.
 
 ## 👨‍💻 Desenvolvimento
 
-Desenvolvido para o curso de Arquitetura de Computadores.
+Desenvolvido para a matéria de Arquitetura de Computadores III.
 
 **Tecnologias**:
 - Python 3
@@ -320,4 +320,4 @@ Desenvolvido para o curso de Arquitetura de Computadores.
 
 ---
 
-**Divirta-se aprendendo sobre arquiteturas superescalares!** 🚀
+
