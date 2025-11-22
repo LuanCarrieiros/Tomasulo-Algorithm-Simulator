@@ -1,267 +1,307 @@
-# Exemplos de Programas para o Simulador de Tomasulo
+# 📚 Exemplos de Programas - Simulador de Tomasulo
 
-## Exemplo 1: Dependências RAW (Read After Write)
+Este arquivo contém exemplos prontos para copiar e colar no simulador.
 
-```assembly
-# Demonstra dependências de dados
-ADD F0, F1, F2    # F0 = F1 + F2
-MUL F4, F0, F3    # Depende de F0 (RAW hazard)
-SUB F6, F4, F5    # Depende de F4 (RAW hazard)
-DIV F8, F6, F7    # Depende de F6 (RAW hazard)
-```
-
-**O que observar:**
-- MUL espera ADD completar (veja Qj apontando para ROB0)
-- SUB espera MUL completar
-- Formação de uma cadeia de dependências
+**Como usar:**
+1. Configure o simulador (clique em "Configurar Simulador")
+2. Copie o código do exemplo (sem comentários!)
+3. Cole na área "Carregar Instruções"
+4. Clique em "Iniciar"
+5. Use "Próximo Ciclo" para ver passo a passo
 
 ---
 
-## Exemplo 2: Paralelismo de Instruções
+## 📋 Índice de Exemplos
 
+1. [Dependências RAW](#1-dependências-raw-read-after-write)
+2. [Paralelismo Máximo](#2-paralelismo-máximo)
+3. [WAR e WAW Hazards](#3-war-e-waw-hazards)
+4. [Operações de Memória](#4-operações-de-memória)
+5. [Branch com Especulação](#5-branch-com-especulação)
+6. [Produto Escalar (Programa Completo)](#6-produto-escalar-programa-completo)
+7. [Saturação de Recursos](#7-saturação-de-recursos)
+8. [Latências Diferentes](#8-latências-diferentes)
+
+---
+
+## 1. Dependências RAW (Read After Write)
+
+**O que demonstra:** Cadeia de dependências de dados (RAW hazards)
+
+**Configuração sugerida:** Padrão (ADD/SUB=1, MUL/DIV=1)
+
+**O que observar:**
+- MUL espera ADD terminar (Qj aponta para RS_ADD)
+- SUB espera MUL terminar (Qj aponta para RS_MULT)
+- DIV espera SUB terminar
+- Formação de cadeia de dependências sequencial
+- IPC baixo (~0.20-0.30) devido às dependências
+
+### Código para copiar:
 ```assembly
-# Instruções independentes executam em paralelo
-ADD F0, F1, F2    # Independente
-MUL F4, F5, F6    # Independente - executa em paralelo!
-SUB F8, F9, F10   # Independente - executa em paralelo!
-ADD F12, F13, F14 # Independente - executa em paralelo!
+ADD F0 F1 F2
+MUL F4 F0 F3
+SUB F6 F4 F5
+DIV F8 F6 F7
 ```
+
+---
+
+## 2. Paralelismo Máximo
+
+**O que demonstra:** Instruções 100% independentes executando em paralelo
+
+**Configuração sugerida:** ADD/SUB=3, MUL/DIV=3 (para ver paralelismo real)
 
 **O que observar:**
 - Todas as instruções são despachadas rapidamente
 - Múltiplas RSs ocupadas simultaneamente
-- IPC próximo de 1.0 (bom paralelismo)
-- Poucas bolhas
+- Sem dependências entre instruções
+- IPC melhor que exemplo anterior (~0.30-0.40)
+- Poucas ou zero bolhas estruturais
+
+### Código para copiar:
+```assembly
+ADD F0 F1 F2
+MUL F4 F5 F6
+SUB F8 F9 F10
+ADD F12 F13 F14
+MUL F16 F17 F18
+SUB F20 F21 F22
+```
 
 ---
 
-## Exemplo 3: WAR e WAW Hazards (Resolvidos pelo ROB!)
+## 3. WAR e WAW Hazards
 
-```assembly
-# Hazards falsos resolvidos por renomeação
-ADD F0, F1, F2    # F0 (versão 1)
-SUB F3, F0, F4    # Lê F0 (versão 1)
-MUL F0, F5, F6    # F0 (versão 2) - WAW com instrução 1
-DIV F7, F0, F8    # Lê F0 (versão 2) - WAR com instrução 2
-```
+**O que demonstra:** Hazards falsos resolvidos por renomeação de registradores
+
+**Configuração sugerida:** Padrão
 
 **O que observar:**
-- Não há stalls por WAR ou WAW
-- ROB renomeia F0 automaticamente
-- SUB pega F0 de ROB0, DIV pega F0 de ROB2
-- Qi dos registradores aponta para ROB correto
+- F0 é escrito duas vezes (WAW entre ADD e MUL)
+- SUB lê F0 versão 1 (do ADD)
+- DIV lê F0 versão 2 (do MUL)
+- ROB renomeia automaticamente, sem stalls!
+- Na aba "Registradores", Qi aponta para ROB correto
+
+### Código para copiar:
+```assembly
+ADD F0 F1 F2
+SUB F3 F0 F4
+MUL F0 F5 F6
+DIV F7 F0 F8
+```
 
 ---
 
-## Exemplo 4: Operações de Memória
+## 4. Operações de Memória
 
-```assembly
-# LOAD e STORE
-LOAD F0, 0(R1)     # F0 = Mem[R1 + 0]
-LOAD F2, 4(R1)     # F2 = Mem[R1 + 4]
-ADD F4, F0, F2     # Depende dos LOADs
-STORE F4, 8(R1)    # Mem[R1 + 8] = F4
-```
+**O que demonstra:** LOAD e STORE com dependências de dados
+
+**Configuração sugerida:** Padrão (LOAD latência=6)
 
 **O que observar:**
-- LOADs usam Load Buffers
+- LOADs usam Load Buffers (RS_STORE)
 - STORE usa Store Buffer
-- ADD espera LOADs completarem (Qj e Qk)
+- ADD espera AMBOS os LOADs terminarem (Qj e Qk apontam para RSs de LOAD)
+- STORE espera ADD terminar
+- Latência alta de LOAD (6 ciclos padrão) aumenta tempo total
+- IPC muito baixo (~0.20) devido a dependências + latência alta
 
----
-
-## Exemplo 5: Desvios Condicionais (Especulação)
-
+### Código para copiar:
 ```assembly
-# Especulação de desvios
-BEQ R1, R2, 3      # Se R1 == R2, pula 3 instruções
-ADD F0, F1, F2     # Instrução especulativa
-MUL F3, F0, F4     # Instrução especulativa
-SUB F5, F3, F6     # Instrução especulativa
-DIV F7, F8, F9     # Instrução após o desvio
+LD F0 R1 0
+LD F2 R1 4
+ADD F4 F0 F2
+ST F4 R1 8
 ```
 
-**O que observar:**
-- Na aba ROB, veja a coluna "Speculative" = Sim
-- Instruções especulativas são executadas, mas só fazem commit após BEQ resolver
-- Se desvio for tomado, instruções especulativas seriam descartadas
-
 ---
 
-## Exemplo 6: Saturação de Recursos
+## 5. Branch com Especulação
 
+**O que demonstra:** Execução especulativa após desvio condicional
+
+**Configuração sugerida:** Padrão
+
+**O que observar:**
+- BEQ verifica se R1 == R2 e pula para instrução ID 4 se verdadeiro
+- Instruções 1-3 (ADD, MUL, SUB) são especulativas
+- Na aba "Status das Instruções", veja que podem executar antes do branch resolver
+- Se branch for tomado, instruções 1-3 seriam descartadas (squashed)
+- Simulador sempre toma branches (simplificação)
+
+### Código para copiar:
 ```assembly
-# Satura as Reservation Stations
-ADD F0, F1, F2
-ADD F3, F4, F5
-ADD F6, F7, F8
-ADD F9, F10, F11   # Tem que esperar! Só há 3 Add RS
-MUL F12, F13, F14
-MUL F15, F16, F17
-MUL F18, F19, F20  # Tem que esperar! Só há 2 Mul RS
+BEQ 4 R1 R2
+ADD F0 F1 F2
+MUL F3 F0 F4
+SUB F5 F3 F6
+DIV F7 F8 F9
 ```
 
-**O que observar:**
-- 4ª instrução ADD não consegue issue (sem RS livre)
-- Ciclos de bolha aumentam
-- IPC diminui devido à contenção de recursos
-
 ---
 
-## Exemplo 7: Loop com Desvio
+## 6. Produto Escalar (Programa Completo)
 
+**O que demonstra:** Programa realista calculando produto escalar de dois vetores
+
+**Fórmula:** result = A[0]×B[0] + A[1]×B[1] + A[2]×B[2]
+
+**Configuração sugerida:** LOAD/STORE=2, MUL/DIV=2, ADD/SUB=2
+
+**O que observar:**
+- 6 LOADs: podem executar em paralelo (2 por vez se tiver 2 Load Buffers)
+- 3 MULs: aguardam LOADs, depois executam em paralelo
+- 2 ADDs: formam cadeia de dependência (segundo ADD depende do primeiro)
+- STORE: aguarda todas as operações terminarem
+- Bom mix de paralelismo e dependências
+- IPC moderado (~0.35-0.45)
+
+### Código para copiar:
 ```assembly
-# Simula um pequeno loop
-ADDI R1, R0, 0     # R1 = 0 (contador)
-ADDI R2, R0, 5     # R2 = 5 (limite)
-ADD F0, F1, F2     # Corpo do loop
-ADDI R1, R1, 1     # R1++
-BEQ R1, R2, -2     # Se R1 == R2, encerra (else volta 2 instruções)
+LD F0 R1 0
+LD F1 R1 4
+LD F2 R1 8
+LD F3 R2 0
+LD F4 R2 4
+LD F5 R2 8
+MUL F6 F0 F3
+MUL F7 F1 F4
+MUL F8 F2 F5
+ADD F9 F6 F7
+ADD F10 F9 F8
+ST F10 R3 0
 ```
 
-**O que observar:**
-- Desvio condicional ao final
-- Especulação após BEQ
-
 ---
 
-## Exemplo 8: Instruções com Imediato
+## 7. Saturação de Recursos
 
+**O que demonstra:** Como falta de RSs causa bolhas estruturais
+
+**Configuração para ver bolhas:** ADD/SUB=1, MUL/DIV=1 (apenas 1 de cada!)
+
+**Configuração sem bolhas:** ADD/SUB=5, MUL/DIV=5
+
+**O que observar:**
+- Com 1 RS: apenas 1 ADD pode fazer issue por vez
+- 10 ADDs seguidos saturam a única ADD RS
+- Instruções ficam esperando = bolhas estruturais (contador de bolhas aumenta)
+- Com 5 RSs: sem bolhas! Todas fazem issue rápido
+- Compare os dois cenários!
+
+### Código para copiar:
 ```assembly
-# Uso de valores imediatos
-ADDI R1, R0, 100   # R1 = 0 + 100
-SUBI R2, R1, 50    # R2 = R1 - 50
-ADDI F0, F1, 10    # F0 = F1 + 10
+ADD F0 R1 R2
+ADD F3 R4 R5
+ADD F6 R7 R8
+ADD F9 R10 R11
+ADD F12 R13 R14
+ADD F15 R16 R17
+ADD F18 R19 R20
+ADD F21 R22 R23
+ADD F24 R25 R26
+ADD F27 R28 R29
 ```
 
-**O que observar:**
-- Vk recebe o valor imediato diretamente
-- Qk fica como '-' (não há dependência)
-
 ---
 
-## Exemplo 9: Latências Diferentes
+## 8. Latências Diferentes
 
+**O que demonstra:** Como diferentes latências afetam o tempo de execução
+
+**Configuração sugerida:**
+- ADD latência=2
+- MUL latência=10
+- DIV latência=40 (!)
+
+**O que observar:**
+- ADDs terminam rápido (2 ciclos)
+- MUL demora 10 ciclos executando
+- DIV demora 40 ciclos! (muito lenta)
+- Na aba "Reservation Stations", veja a coluna "Cycles" diminuindo
+- Tempo total dominado pela operação mais lenta (DIV)
+- IPC baixo se houver dependências da DIV
+
+### Código para copiar:
 ```assembly
-# Demonstra diferentes latências
-ADD F0, F1, F2     # 2 ciclos
-MUL F3, F4, F5     # 10 ciclos (mais lenta)
-ADD F6, F7, F8     # 2 ciclos
-DIV F9, F10, F11   # 40 ciclos (muito lenta!)
-ADD F12, F13, F14  # 2 ciclos
+ADD F0 F1 F2
+MUL F3 F4 F5
+ADD F6 F7 F8
+DIV F9 F10 F11
+ADD F12 F13 F14
 ```
 
-**O que observar:**
-- ADDs completam rápido
-- MUL demora 10 ciclos
-- DIV demora 40 ciclos
-- Veja "Cycles" na aba RS diminuindo
+---
+
+## 🎯 Dicas para Demonstrações
+
+### Para mostrar **paralelismo**:
+- Use Exemplo 2 ou 6
+- Configure múltiplas RSs (3-5 de cada)
+- Observe múltiplas RSs ocupadas simultaneamente
+
+### Para mostrar **dependências**:
+- Use Exemplo 1 ou 4
+- Execute passo a passo com "Próximo Ciclo"
+- Observe Qj/Qk apontando para RSs produtoras
+
+### Para mostrar **renomeação de registradores**:
+- Use Exemplo 3
+- Observe a aba "Registradores" - Qi muda quando há múltiplas escritas em F0
+- Compare com a aba "ROB" para ver versões diferentes
+
+### Para mostrar **bolhas estruturais**:
+- Use Exemplo 7
+- Configure apenas 1 RS de cada tipo
+- Observe contador de bolhas aumentando
+- Compare com 5 RSs (zero bolhas!)
+
+### Para mostrar **impacto de latências**:
+- Use Exemplo 8
+- Configure DIV=40, MUL=10
+- Veja quanto tempo a DIV domina a execução
 
 ---
 
-## Exemplo 10: Programa Completo - Produto Escalar
+## 📊 Tabela de Comparação de IPCs Esperados
 
-```assembly
-# Calcula produto escalar: result = (A[0]*B[0]) + (A[1]*B[1]) + (A[2]*B[2])
+| Exemplo | IPC Típico | Motivo |
+|---------|-----------|--------|
+| 1. Dependências RAW | 0.20-0.30 | Cadeia sequencial |
+| 2. Paralelismo | 0.35-0.45 | Instruções independentes |
+| 3. WAR/WAW | 0.25-0.35 | Algumas dependências |
+| 4. Memória | 0.15-0.25 | LOAD latência alta |
+| 5. Branch | 0.20-0.30 | Dependências + branch |
+| 6. Produto Escalar | 0.35-0.45 | Mix balanceado |
+| 7. Saturação (1 RS) | 0.15-0.25 | Muitas bolhas |
+| 7. Saturação (5 RS) | 0.40-0.50 | Sem bolhas |
+| 8. Latências | 0.10-0.20 | DIV muito lenta |
 
-# Carrega elementos do vetor A
-LOAD F0, 0(R1)     # F0 = A[0]
-LOAD F1, 4(R1)     # F1 = A[1]
-LOAD F2, 8(R1)     # F2 = A[2]
-
-# Carrega elementos do vetor B
-LOAD F3, 0(R2)     # F3 = B[0]
-LOAD F4, 4(R2)     # F4 = B[1]
-LOAD F5, 8(R2)     # F5 = B[2]
-
-# Multiplica elementos correspondentes
-MUL F6, F0, F3     # F6 = A[0] * B[0]
-MUL F7, F1, F4     # F7 = A[1] * B[1]
-MUL F8, F2, F5     # F8 = A[2] * B[2]
-
-# Soma os produtos
-ADD F9, F6, F7     # F9 = F6 + F7
-ADD F10, F9, F8    # F10 = F9 + F8 (resultado final)
-
-# Armazena resultado
-STORE F10, 0(R3)   # Mem[R3] = resultado
-```
-
-**O que observar:**
-- 6 LOADs podem executar em paralelo (2 por vez)
-- 3 MULs podem executar em paralelo (2 por vez)
-- ADDs formam cadeia de dependência
-- Observe o alto IPC devido ao paralelismo
+**Nota:** IPCs são estimativas. Valores reais dependem das configurações de RSs e latências.
 
 ---
 
-## Exemplo 11: Teste de ROB Cheio
+## 🎓 Para Apresentações
 
-```assembly
-# Muitas instruções longas para encher o ROB
-MUL F0, F1, F2
-MUL F3, F4, F5
-MUL F6, F7, F8
-MUL F9, F10, F11
-MUL F12, F13, F14
-DIV F15, F16, F17
-DIV F18, F19, F20
-DIV F21, F22, F23
-DIV F24, F25, F26
-DIV F27, F28, F29
-ADD F30, F31, F0
-ADD F1, F2, F3
-ADD F4, F5, F6
-ADD F7, F8, F9
-ADD F10, F11, F12
-ADD F13, F14, F15
-```
+### Ordem sugerida de demonstração:
 
-**O que observar:**
-- ROB (16 entradas) pode encher
-- Issue pode parar por falta de ROB
-- Ciclos de bolha aumentam
-- Commits liberam espaço no ROB
+1. **Exemplo 2** - Mostre que o Tomasulo funciona (paralelismo básico)
+2. **Exemplo 1** - Mostre como resolve dependências automaticamente
+3. **Exemplo 3** - Mostre renomeação de registradores (WAW/WAR)
+4. **Exemplo 7** - Compare 1 RS vs 5 RS (impacto de recursos)
+5. **Exemplo 6** - Programa completo realista
+
+### Roteiro de apresentação (5 minutos):
+
+1. **Minuto 1:** Execute Exemplo 2 - "Vejam múltiplas instruções executando em paralelo!"
+2. **Minuto 2:** Execute Exemplo 1 passo a passo - "Vejam as dependências sendo resolvidas"
+3. **Minuto 3:** Execute Exemplo 3 - "Renomeação automática resolve WAW sem stalls"
+4. **Minuto 4:** Execute Exemplo 7 com 1 RS e depois 5 RS - "Mais recursos = menos bolhas"
+5. **Minuto 5:** Execute Exemplo 6 - "Programa completo mostrando tudo junto"
 
 ---
 
-## Como Usar estes Exemplos
-
-1. Copie o código do exemplo
-2. Cole na área "Programa MIPS" do simulador
-3. Clique em "Carregar Programa"
-4. Use "Step (1 Ciclo)" para ver passo a passo
-5. Ou use "Executar Tudo" para ver o resultado final
-
-## Sugestões de Análise
-
-Para cada exemplo, observe:
-
-### Na aba "Instruções":
-- Quando cada instrução foi despachada (Issue)
-- Quando começou/terminou execução
-- Quando fez Write Result e Commit
-
-### Na aba "Reservation Stations":
-- Quantas RSs estão ocupadas simultaneamente
-- Dependências (Qj, Qk apontam para ROB)
-- Ciclos restantes de cada operação
-
-### Na aba "ROB":
-- HEAD (próxima a fazer commit)
-- TAIL (última despachada)
-- Quais estão prontas (Ready = Sim)
-- Quais são especulativas
-
-### Na aba "Registradores":
-- Qi mostra renomeação (aponta para ROB)
-- Valores só atualizam após commit
-
-### Na aba "Métricas":
-- **IPC alto** = bom paralelismo
-- **Muitas bolhas** = muitos stalls (ruim)
-- Compare diferentes programas!
-
----
-
-**Experimente modificar os exemplos e criar seus próprios programas!** 🎓
+**Divirta-se explorando o algoritmo de Tomasulo!** 🚀
