@@ -8,7 +8,7 @@ class TOMASSULLLERoriGUI:
     def __init__(self, root):
         self.root = root
         self.root.title("Simulador do Algoritmo de Tomasulo")
-        self.root.geometry("1200x800")
+        self.root.geometry("1400x900")
 
         self.simulator = None
 
@@ -91,7 +91,7 @@ class TOMASSULLLERoriGUI:
         self.setup_simulator_button.pack(pady=5)
 
         # --- Área de Copy/Paste ---
-        paste_frame = tk.LabelFrame(left_panel, text="Carregar Instruções (Copy/Paste)", padx=5, pady=5)
+        paste_frame = tk.LabelFrame(left_panel, text="Carregar Instruções", padx=5, pady=5)
         paste_frame.pack(fill=tk.BOTH, expand=True, padx=5, pady=5)
 
         tk.Label(paste_frame, text="Cole as instruções (uma por linha):", font=("Arial", 9)).pack(anchor=tk.W)
@@ -108,7 +108,7 @@ class TOMASSULLLERoriGUI:
         paste_buttons_frame = tk.Frame(paste_frame)
         paste_buttons_frame.pack(fill=tk.X, pady=5)
 
-        self.load_from_paste_button = tk.Button(paste_buttons_frame, text="Carregar do Texto",
+        self.load_from_paste_button = tk.Button(paste_buttons_frame, text="Iniciar",
                                                 bg="lightgreen", font=("Arial", 9, "bold"))
         self.load_from_paste_button.pack(side=tk.LEFT, padx=2)
 
