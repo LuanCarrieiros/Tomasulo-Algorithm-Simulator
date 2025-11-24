@@ -1,6 +1,7 @@
 from Instruction import Instruction, Op
 from ReservationStation import ReservationStation
 from RegisterFile import RegisterFile
+import copy
 
 
 class TOMASSULLLERoriSimulator:
@@ -28,6 +29,9 @@ class TOMASSULLLERoriSimulator:
         self.current_clock = 0
         self.program_counter = 0  # Índice da próxima instrução a ser emitida
 
+        # Histórico de estados para Step Back
+        self.state_history = []
+
         self.reset_simulation_state()  # Garante um estado limpo
 
     def set_instructions(self, instructions):
@@ -41,6 +45,7 @@ class TOMASSULLLERoriSimulator:
         self.program_counter = 0
         self.cdb_producer_tag = None
         self.cdb_value = None
+        self.state_history = []  # Limpa o histórico
 
         # Limpa todas as RSs
         for rs in self.rs_add:
@@ -67,10 +72,52 @@ class TOMASSULLLERoriSimulator:
             instr.set_branch_resolved(False)
             instr.set_squashed(False)
 
+    def save_state(self):
+        """Salva o estado atual para permitir Step Back"""
+        state = {
+            'current_clock': self.current_clock,
+            'bubble_cycles': self.bubble_cycles,
+            'program_counter': self.program_counter,
+            'cdb_producer_tag': self.cdb_producer_tag,
+            'cdb_value': self.cdb_value,
+            'instructions': copy.deepcopy(self.all_instructions),
+            'rs_add': copy.deepcopy(self.rs_add),
+            'rs_store': copy.deepcopy(self.rs_store),
+            'rs_mult': copy.deepcopy(self.rs_mult),
+            'rs_branch': copy.deepcopy(self.rs_branch),
+            'register_file': copy.deepcopy(self.register_file)
+        }
+        self.state_history.append(state)
+
+    def restore_previous_state(self):
+        """Restaura o estado anterior (Step Back)"""
+        if len(self.state_history) == 0:
+            return False  # Não há histórico
+
+        state = self.state_history.pop()
+        self.current_clock = state['current_clock']
+        self.bubble_cycles = state['bubble_cycles']
+        self.program_counter = state['program_counter']
+        self.cdb_producer_tag = state['cdb_producer_tag']
+        self.cdb_value = state['cdb_value']
+        self.all_instructions = state['instructions']
+        self.rs_add = state['rs_add']
+        self.rs_store = state['rs_store']
+        self.rs_mult = state['rs_mult']
+        self.rs_branch = state['rs_branch']
+        self.register_file = state['register_file']
+        return True
+
+    def can_step_back(self):
+        """Verifica se é possível voltar um ciclo"""
+        return len(self.state_history) > 0
+
     def next_cycle(self):
         """Método para avançar um ciclo"""
         if self.is_simulation_finished():
             return
+        # Salva o estado antes de avançar (para permitir Step Back)
+        self.save_state()
         self.current_clock += 1
         # As fases na ordem correta
         self.commit_instructions()
