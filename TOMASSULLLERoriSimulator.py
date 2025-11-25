@@ -29,6 +29,10 @@ class TOMASSULLLERoriSimulator:
         self.current_clock = 0
         self.program_counter = 0  # Índice da próxima instrução a ser emitida
 
+        # Contadores permanentes de métricas (nunca resetam durante a simulação)
+        self.total_squashed_count = 0
+        self.max_speculative_count = 0
+
         # Histórico de estados para Step Back
         self.state_history = []
 
@@ -46,6 +50,8 @@ class TOMASSULLLERoriSimulator:
         self.cdb_producer_tag = None
         self.cdb_value = None
         self.state_history = []  # Limpa o histórico
+        self.total_squashed_count = 0  # Reseta contador de descartadas
+        self.max_speculative_count = 0  # Reseta contador de especulativas
 
         # Limpa todas as RSs
         for rs in self.rs_add:
@@ -71,6 +77,7 @@ class TOMASSULLLERoriSimulator:
             instr.set_branch_taken(False)
             instr.set_branch_resolved(False)
             instr.set_squashed(False)
+            instr.clear_speculative()  # Limpa flag de especulação
 
     def save_state(self):
         """Salva o estado atual para permitir Step Back"""
@@ -201,6 +208,15 @@ class TOMASSULLLERoriSimulator:
                         rs.assign(instr_to_issue, instr_to_issue.get_op(), Qj, Vj, Qk, Vk)
                         instr_to_issue.set_issue_cycle(self.current_clock)
 
+                        # BUG FIX #3: Marcar instruções como especulativas
+                        # Verifica se existe branch não-comitado antes desta instrução
+                        for i in range(self.program_counter - 1, -1, -1):
+                            prev_instr = self.all_instructions[i]
+                            if (prev_instr.get_op() in [Op.BEQ, Op.BNE] and
+                                prev_instr.get_commit_cycle() == -1):
+                                instr_to_issue.set_speculative(prev_instr.get_id())
+                                break
+
                         # Atualizar o Register File (RAT) para o registrador de destino
                         if instr_to_issue.get_dest() is not None and instr_to_issue.get_dest() != "0":
                             self.register_file.update_register_status(instr_to_issue.get_dest(), None, rs.get_name())
@@ -309,15 +325,25 @@ class TOMASSULLLERoriSimulator:
                             break
 
                     if target_instruction_index != -1:
-                        for i in range(instr_index_to_commit + 1, len(self.all_instructions)):
+                        # BUG FIX: Descartar apenas instruções ENTRE branch e destino
+                        # ANTES: descartava todas após o branch
+                        # DEPOIS: descarta só as especulativas (entre branch+1 e destino-1)
+                        for i in range(instr_index_to_commit + 1, target_instruction_index):
                             future_instr = self.all_instructions[i]
                             if future_instr.get_commit_cycle() == -1 and not future_instr.is_squashed():
                                 future_instr.set_squashed(True)
+                                self.total_squashed_count += 1  # Incrementa contador permanente
                                 self.free_reservation_station(future_instr, self.rs_add)
                                 self.free_reservation_station(future_instr, self.rs_store)
                                 self.free_reservation_station(future_instr, self.rs_mult)
                                 self.free_reservation_station(future_instr, self.rs_branch)
+                        # Salta PC para o destino do branch
                         self.program_counter = target_instruction_index
+
+                    # Limpa flag especulativa de todas instruções que dependiam deste branch
+                    for instr in self.all_instructions:
+                        if instr.get_speculative_branch_id() == instr_to_commit.get_id():
+                            instr.clear_speculative()
 
                 # Libera a RS da instrução comitada
                 self.free_reservation_station(instr_to_commit, self.rs_add)
@@ -368,6 +394,23 @@ class TOMASSULLLERoriSimulator:
 
     def get_register_file(self):
         return self.register_file
+
+    def get_total_squashed(self):
+        """Retorna total de instruções descartadas (nunca reseta)"""
+        return self.total_squashed_count
+
+    def get_current_speculative_count(self):
+        """Retorna número ATUAL de instruções especulativas (não comitadas e não descartadas)"""
+        count = 0
+        for instr in self.all_instructions:
+            if (instr.is_speculative and
+                not instr.is_squashed() and
+                instr.get_commit_cycle() == -1):
+                count += 1
+        # Atualiza o máximo se necessário
+        if count > self.max_speculative_count:
+            self.max_speculative_count = count
+        return count
 
     def calculate_ipc(self):
         committed_count = 0
