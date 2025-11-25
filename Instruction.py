@@ -34,6 +34,10 @@ class Instruction:
         self.branch_resolved = False
         self.squashed = False
 
+        # Campos para Especulação
+        self.is_speculative = False
+        self.speculative_branch_id = -1
+
     # Getters
     def get_id(self):
         return self.id
@@ -83,6 +87,9 @@ class Instruction:
     def is_squashed(self):
         return self.squashed
 
+    def get_speculative_branch_id(self):
+        return self.speculative_branch_id
+
     # Setters
     def set_current_latency(self, current_latency):
         self.current_latency = current_latency
@@ -114,6 +121,16 @@ class Instruction:
     def set_squashed(self, squashed):
         self.squashed = squashed
 
+    def set_speculative(self, branch_id):
+        """Marca instrução como especulativa"""
+        self.is_speculative = True
+        self.speculative_branch_id = branch_id
+
+    def clear_speculative(self):
+        """Limpa flag de especulação"""
+        self.is_speculative = False
+        self.speculative_branch_id = -1
+
     def __str__(self):
         base_string = (f"Instr {self.id}: {self.op.value} {self.dest}, {self.src1}, {self.src2} | "
                       f"Issue: {self.issue_cycle if self.issue_cycle != -1 else 'N/A'}, "
@@ -124,4 +141,6 @@ class Instruction:
                       f"Latency Restante: {self.current_latency}")
         if self.squashed:
             return base_string + " (DESCARTADA)"
+        elif self.is_speculative and self.commit_cycle == -1:
+            return base_string + f" (ESPECULATIVA - depende do branch ID {self.speculative_branch_id})"
         return base_string
