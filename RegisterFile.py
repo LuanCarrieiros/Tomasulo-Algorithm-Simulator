@@ -19,9 +19,9 @@ class RegisterStatus:
 class RegisterFile:
     def __init__(self):
         self.registers = {}
-        # Inicializa alguns registradores com valores padrão (ou "prontos")
-        # Ex: R0-R10 (Para suportar o limite de 10)
-        for i in range(11):  # Ajustado para ir até R10
+        # Inicializa 32 registradores (R0-R31) - Padrão MIPS
+        # R0 é sempre zero (convenção MIPS), mas por simplicidade permitimos escrita aqui
+        for i in range(32):
             self.registers[f"R{i}"] = RegisterStatus(0.0, None)  # Valor 0.0, sem produtor
 
     def get_register_status(self, register_name):
