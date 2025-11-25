@@ -711,14 +711,9 @@ class TOMASSULLLERoriGUI:
         bubble_cycles = self.simulator.get_bubble_cycles()
         total_cycles = self.simulator.get_current_clock()
 
-        # Conta instruções especulativas e descartadas
-        speculative = 0
-        squashed = 0
-        for instr in self.simulator.get_all_instructions():
-            if instr.is_squashed():
-                squashed += 1
-            elif self.is_instruction_speculative(instr.get_id()):
-                speculative += 1
+        # Usa os novos métodos do simulador que não resetam
+        speculative = self.simulator.get_current_speculative_count()
+        squashed = self.simulator.get_total_squashed()
 
         self.metrics_label.config(
             text=f"📊 IPC: {ipc:.3f} | Ciclos: {total_cycles} | Bolhas: {bubble_cycles} | "
