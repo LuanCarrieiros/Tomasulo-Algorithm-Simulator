@@ -1,0 +1,106 @@
+# Exemplo com Especulação e Descarte
+# Este programa tem um branch que vai causar especulação
+# e depois descarte de instruções
+
+# Inicializa alguns valores
+ADD R1 R0 R0
+ADD R2 R1 R1
+ADD R3 R2 R2
+
+# Branch que vai causar especulação
+# Compara R1 com R2 e pula para instrução 10 se iguais
+BEQ 10 R1 R2
+
+# Instruções ESPECULATIVAS (serão descartadas)
+ADD R4 R3 R3
+MUL R5 R4 R4
+DIV R6 R5 R5
+ADD R7 R6 R6
+
+# Alvo do branch (instrução 10)
+SUB R8 R3 R1
+MUL R9 R8 R2
+ADD R10 R9 R3
+
+# Mais operações após resolver o branch
+DIV R11 R10 R8
+ADD R12 R11 R9
+
+
+# ============================================
+# EXEMPLO CORRETO DE ESPECULAÇÃO
+# Este exemplo vai REALMENTE mostrar instruções especulativas
+# ============================================
+
+# Setup inicial com valores diferentes
+ADD R2 R0 20     # R2 = 20
+ADD R3 R0 2      # R3 = 2
+ADD R5 R0 10     # R5 = 10
+
+# Branch com latência que vai resolver rápido
+# Como R2 (20) != R5 (10), vai desviar para ID 15
+BEQ 15 R2 R5
+
+# INSTRUÇÕES ESPECULATIVAS (IDs 5-14)
+# Estas serão emitidas e executadas enquanto o branch resolve
+# Quando o branch committar, elas serão DESCARTADAS
+ADD R10 R2 R2    # ID 5 - Especulativa
+ADD R11 R10 R3   # ID 6 - Especulativa (depende de R10)
+MUL R12 R11 R3   # ID 7 - Especulativa (depende de R11)
+ADD R13 R12 R2   # ID 8 - Especulativa
+DIV R14 R13 R3   # ID 9 - Especulativa
+ADD R15 R14 R10  # ID 10 - Especulativa
+MUL R16 R15 R11  # ID 11 - Especulativa
+ADD R17 R16 R12  # ID 12 - Especulativa
+SUB R18 R17 R13  # ID 13 - Especulativa
+ADD R19 R18 R14  # ID 14 - Especulativa
+
+# DESTINO DO BRANCH (ID 15+)
+# Estas instruções serão executadas APÓS o squash
+ADD R30 R2 R3    # ID 15 - Primeira instrução do destino
+MUL R31 R30 R5   # ID 16
+ADD R32 R31 R2   # ID 17
+DIV R33 R32 R3   # ID 18
+ADD R34 R33 R30  # ID 19
+MUL R35 R34 R31  # ID 20
+
+
+# Preparação: resultados prontos por ADDs (branch vai comparar R2 e R5)
+ADD R2 R0 20
+ADD R3 R0 2
+ADD R5 R0 20   # igual a R2 => BEQ será TAKEN cedo
+
+# Uma instrução independente lenta (opcional) para ocupar RS de MUL/DIV
+MUL R30 R3 R3
+
+# BEQ que usa R2 e R5 (resultados rápidos) → resolve cedo e squasha as especulativas
+# Vai pular para a linha 20 se R2 == R5
+BEQ 20 R2 R5
+
+# ----- INSTRUÇÕES ESPECULATIVAS (algumas serão emitidas, depois descartadas) -----
+ADD R10 R2 R2
+ADD R11 R2 R3
+ADD R12 R3 R3
+MUL R13 R2 R3
+ADD R14 R13 R2
+ADD R15 R14 R3
+ADD R16 R15 R2
+
+# ----- LINHA 20: DESTINO DO BRANCH (muitas instruções aqui para ver emissão após squash) -----
+ADD R20 R2 R3        # linha 20
+SUB R21 R20 R3
+ADD R22 R21 R2
+MUL R23 R22 R5
+ADD R24 R23 R2
+SUB R25 R24 R3
+ADD R26 R25 R2
+MUL R27 R26 R3
+ADD R28 R27 R2
+SUB R29 R28 R3
+ADD R31 R29 R2
+ADD R32 R31 R3
+MUL R33 R32 R2
+ADD R34 R33 R3
+SUB R35 R34 R2
+ADD R36 R35 R3
+
