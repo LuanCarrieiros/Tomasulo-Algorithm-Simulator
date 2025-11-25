@@ -135,8 +135,10 @@
                                 class="px-2 py-1 rounded-lg bg-white bg-opacity-30 text-white text-xs"
                                 style="color: white;">
                             <option value="" style="background-color: #667eea; color: white;">Exemplos...</option>
-                            <option value="basic" style="background-color: #667eea; color: white;">Básico</option>
-                            <option value="speculation" style="background-color: #667eea; color: white;">Especulação</option>
+                            <option value="parallelism" style="background-color: #667eea; color: white;">Paralelismo Independente</option>
+                            <option value="div_latency" style="background-color: #667eea; color: white;">DIV com Latência Alta</option>
+                            <option value="saturate_rs" style="background-color: #667eea; color: white;">Saturar RS</option>
+                            <option value="speculation" style="background-color: #667eea; color: white;">Especulação Completa</option>
                         </select>
                     </div>
                     <textarea
@@ -457,25 +459,85 @@ BEQ 5 R1 R2"></textarea>
     <script>
         function simulator() {
             return {
-                program: `# Especulação
-ADD R2 R0 20
-ADD R3 R0 2
-ADD R5 R0 20
-BEQ 10 R2 R5
-ADD R10 R2 R2
-ADD R11 R2 R3
-ADD R12 R3 R3
-MUL R13 R2 R3
-ADD R14 R13 R2
-ADD R20 R2 R3`,
+                program: `# Formato: OP DEST SRC1 SRC2
+# Exemplo de operações básicas:
+
+ADD R1 R0 10    # R1 = R0 + 10 = 10
+ADD R2 R0 20    # R2 = R0 + 20 = 20
+MUL R3 R1 R2    # R3 = R1 * R2 = 200
+ADD R4 R3 R1    # R4 = R3 + R1 = 210
+
+# Selecione um exemplo no dropdown acima para começar!`,
                 config: {
                     rs_add: 3, rs_mult: 2, rs_store: 2, rs_branch: 1,
                     latency_add: 2, latency_mul: 10, latency_div: 40,
                     latency_load: 2, latency_store: 2, latency_branch: 1
                 },
                 examples: {
-                    basic: `ADD R1 R0 R0\nADD R2 R1 R1\nADD R3 R2 R2\nMUL R4 R3 R3`,
-                    speculation: `ADD R2 R0 20\nADD R3 R0 2\nADD R5 R0 20\nBEQ 10 R2 R5\nADD R10 R2 R2\nADD R11 R2 R3\nADD R12 R3 R3\nMUL R13 R2 R3\nADD R14 R13 R2\nADD R20 R2 R3`
+                    parallelism: `# Paralelismo Independente
+# Instruções INDEPENDENTES executam em paralelo
+# Teste: compare com 3 RS vs 1 RS
+
+ADD R1 R0 10
+ADD R2 R0 20    # Independente de R1
+ADD R3 R0 30    # Independente de R1 e R2
+ADD R4 R0 40    # Independente de todas
+MUL R5 R0 5     # Independente, usa RS diferente
+MUL R6 R0 6     # Independente
+ADD R7 R0 70
+ADD R8 R0 80`,
+
+                    div_latency: `# DIV com Latência Alta
+# Teste: latência DIV 40 vs 10 ciclos
+
+ADD R1 R0 100
+ADD R2 R0 5
+DIV R3 R1 R2    # Divisão lenta!
+ADD R4 R3 R0    # Espera DIV terminar
+MUL R5 R4 R2    # Depende de R4
+ADD R6 R5 R3    # Depende de R5`,
+
+                    saturate_rs: `# Saturar Reservation Stations
+# 8 ADDs independentes (mais que as 3 RSs padrão)
+# ADDs 4-8 vão esperar RS livre (bolhas!)
+
+ADD R1 R0 1
+ADD R2 R0 2
+ADD R3 R0 3
+ADD R4 R0 4     # Espera RS livre
+ADD R5 R0 5     # Espera RS livre
+ADD R6 R0 6     # Espera RS livre
+ADD R7 R0 7     # Espera RS livre
+ADD R8 R0 8     # Espera RS livre`,
+
+                    speculation: `# Especulação Completa com Branch
+# Setup inicial
+ADD R2 R0 20     # ID 0
+ADD R3 R0 2      # ID 1
+ADD R5 R0 10     # ID 2
+
+# Branch: R2(20) != R5(10) => SEMPRE TOMADO
+BEQ 14 R2 R5     # ID 3: Pula para ID 14
+
+# INSTRUÇÕES ESPECULATIVAS (IDs 4-13)
+# Serão DESCARTADAS quando branch committar!
+ADD R10 R2 R2    # ID 4  - Squashed
+ADD R11 R10 R3   # ID 5  - Squashed
+MUL R12 R11 R3   # ID 6  - Squashed
+ADD R13 R12 R2   # ID 7  - Squashed
+DIV R14 R13 R3   # ID 8  - Squashed
+ADD R15 R14 R10  # ID 9  - Squashed
+MUL R16 R15 R11  # ID 10 - Squashed
+ADD R17 R16 R12  # ID 11 - Squashed
+SUB R18 R17 R13  # ID 12 - Squashed
+ADD R19 R18 R14  # ID 13 - Squashed
+
+# DESTINO DO BRANCH (ID 14+)
+# Estas SIM serão executadas
+ADD R30 R2 R3    # ID 14 - Destino do branch
+MUL R31 R30 R5   # ID 15
+ADD R32 R31 R2   # ID 16
+DIV R33 R32 R3   # ID 17`
                 },
                 results: null,
                 cycleIndex: 0,
