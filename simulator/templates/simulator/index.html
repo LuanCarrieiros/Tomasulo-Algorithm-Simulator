@@ -1,0 +1,504 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Simulador de Tomasulo</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
+    <style>
+        .glass {
+            background: rgba(255, 255, 255, 0.15);
+            backdrop-filter: blur(12px);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+        }
+        .neumorphic {
+            box-shadow: 9px 9px 18px rgba(163, 177, 198, 0.5),
+                       -9px -9px 18px rgba(255, 255, 255, 0.4);
+        }
+        .neumorphic-inset {
+            box-shadow: inset 5px 5px 10px rgba(163, 177, 198, 0.3),
+                       inset -5px -5px 10px rgba(255, 255, 255, 0.6);
+        }
+        body {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+        }
+        .state-waiting { background-color: #E3F2FD; color: #1565C0; }
+        .state-issued { background-color: #FFF9C4; color: #F57F17; }
+        .state-executing { background-color: #BBDEFB; color: #0D47A1; }
+        .state-write { background-color: #C5E1A5; color: #33691E; }
+        .state-committed { background-color: #A5D6A7; color: #1B5E20; }
+        .state-speculative { background-color: #FFE082; color: #E65100; font-weight: 600; }
+        .state-squashed { background-color: #FFCDD2; color: #B71C1C; font-weight: 600; }
+        .scrollbar-thin::-webkit-scrollbar { width: 8px; height: 8px; }
+        .scrollbar-thin::-webkit-scrollbar-track { background: rgba(255, 255, 255, 0.1); border-radius: 10px; }
+        .scrollbar-thin::-webkit-scrollbar-thumb { background: rgba(255, 255, 255, 0.3); border-radius: 10px; }
+        .left-column { width: 350px; min-width: 350px; }
+    </style>
+</head>
+<body class="p-4" x-data="simulator()">
+    <div class="max-w-[1800px] mx-auto">
+        <!-- Header -->
+        <div class="glass neumorphic rounded-3xl p-3 mb-4">
+            <h1 class="text-3xl font-bold text-white text-center">Simulador de Tomasulo</h1>
+        </div>
+
+        <!-- Error Alert -->
+        <div x-show="errorMessage" x-transition class="glass neumorphic rounded-2xl p-3 mb-4 bg-red-500 bg-opacity-30">
+            <div class="flex items-center justify-between">
+                <div class="flex items-center space-x-2">
+                    <span class="text-xl">⚠️</span>
+                    <p class="text-white font-semibold text-sm" x-text="errorMessage"></p>
+                </div>
+                <button @click="errorMessage = null" class="text-white text-xl">&times;</button>
+            </div>
+        </div>
+
+        <div class="flex gap-4">
+            <!-- ========== COLUNA ESQUERDA (350px fixa) ========== -->
+            <div class="left-column space-y-4 flex-shrink-0">
+                <!-- 1. CONFIGURAÇÕES -->
+                <div class="glass neumorphic rounded-3xl p-4">
+                    <h2 class="text-lg font-bold text-white mb-3">⚙️ Configurações</h2>
+
+                    <div class="space-y-3">
+                        <div class="space-y-2">
+                            <p class="text-white text-xs font-bold">Unidades Funcionais</p>
+                            <div class="grid grid-cols-2 gap-2">
+                                <div>
+                                    <label class="text-white text-xs">ADD/SUB</label>
+                                    <input type="number" x-model.number="config.rs_add" min="1" max="10"
+                                           class="w-full px-2 py-1 rounded-lg neumorphic-inset bg-white bg-opacity-40 text-gray-900 text-xs">
+                                </div>
+                                <div>
+                                    <label class="text-white text-xs">MULT/DIV</label>
+                                    <input type="number" x-model.number="config.rs_mult" min="1" max="10"
+                                           class="w-full px-2 py-1 rounded-lg neumorphic-inset bg-white bg-opacity-40 text-gray-900 text-xs">
+                                </div>
+                                <div>
+                                    <label class="text-white text-xs">STORE</label>
+                                    <input type="number" x-model.number="config.rs_store" min="1" max="10"
+                                           class="w-full px-2 py-1 rounded-lg neumorphic-inset bg-white bg-opacity-40 text-gray-900 text-xs">
+                                </div>
+                                <div>
+                                    <label class="text-white text-xs">BRANCH</label>
+                                    <input type="number" x-model.number="config.rs_branch" min="1" max="10"
+                                           class="w-full px-2 py-1 rounded-lg neumorphic-inset bg-white bg-opacity-40 text-gray-900 text-xs">
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="space-y-2">
+                            <p class="text-white text-xs font-bold">Latências (ciclos)</p>
+                            <div class="grid grid-cols-2 gap-2">
+                                <div>
+                                    <label class="text-white text-xs">ADD/SUB</label>
+                                    <input type="number" x-model.number="config.latency_add" min="1" max="50"
+                                           class="w-full px-2 py-1 rounded-lg neumorphic-inset bg-white bg-opacity-40 text-gray-900 text-xs">
+                                </div>
+                                <div>
+                                    <label class="text-white text-xs">MUL</label>
+                                    <input type="number" x-model.number="config.latency_mul" min="1" max="50"
+                                           class="w-full px-2 py-1 rounded-lg neumorphic-inset bg-white bg-opacity-40 text-gray-900 text-xs">
+                                </div>
+                                <div>
+                                    <label class="text-white text-xs">DIV</label>
+                                    <input type="number" x-model.number="config.latency_div" min="1" max="100"
+                                           class="w-full px-2 py-1 rounded-lg neumorphic-inset bg-white bg-opacity-40 text-gray-900 text-xs">
+                                </div>
+                                <div>
+                                    <label class="text-white text-xs">LOAD</label>
+                                    <input type="number" x-model.number="config.latency_load" min="1" max="50"
+                                           class="w-full px-2 py-1 rounded-lg neumorphic-inset bg-white bg-opacity-40 text-gray-900 text-xs">
+                                </div>
+                                <div>
+                                    <label class="text-white text-xs">STORE</label>
+                                    <input type="number" x-model.number="config.latency_store" min="1" max="50"
+                                           class="w-full px-2 py-1 rounded-lg neumorphic-inset bg-white bg-opacity-40 text-gray-900 text-xs">
+                                </div>
+                                <div>
+                                    <label class="text-white text-xs">BRANCH</label>
+                                    <input type="number" x-model.number="config.latency_branch" min="1" max="20"
+                                           class="w-full px-2 py-1 rounded-lg neumorphic-inset bg-white bg-opacity-40 text-gray-900 text-xs">
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 2. EDITOR DE CÓDIGO -->
+                <div class="glass neumorphic rounded-3xl p-4 flex-1">
+                    <div class="flex justify-between items-center mb-2">
+                        <h2 class="text-lg font-bold text-white">📝 Programa</h2>
+                        <select x-model="selectedExample" @change="loadExample()"
+                                class="px-2 py-1 rounded-lg bg-white bg-opacity-30 text-white text-xs"
+                                style="color: white;">
+                            <option value="" style="background-color: #667eea; color: white;">Exemplos...</option>
+                            <option value="basic" style="background-color: #667eea; color: white;">Básico</option>
+                            <option value="speculation" style="background-color: #667eea; color: white;">Especulação</option>
+                        </select>
+                    </div>
+                    <textarea
+                        x-model="program"
+                        rows="20"
+                        class="w-full p-3 rounded-xl neumorphic-inset bg-white bg-opacity-40 text-gray-900 font-mono text-xs scrollbar-thin"
+                        placeholder="# Digite as instruções
+ADD R1 R0 R0
+BEQ 5 R1 R2"></textarea>
+
+                    <div class="grid grid-cols-2 gap-2 mt-3">
+                        <button
+                            @click="runSimulation()"
+                            :disabled="isRunning"
+                            class="py-2 px-4 rounded-xl bg-gradient-to-r from-green-500 to-green-600 text-white font-semibold text-sm disabled:opacity-50">
+                            <span x-show="!isRunning">▶ Iniciar</span>
+                            <span x-show="isRunning">⏳...</span>
+                        </button>
+                        <button
+                            @click="resetSimulation()"
+                            class="py-2 px-4 rounded-xl bg-white bg-opacity-20 text-white font-semibold text-sm">
+                            🗑️ Limpar
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- ========== COLUNA DIREITA (expansível) ========== -->
+            <div class="flex-1 space-y-4">
+                <!-- 1. CONTROLES + MÉTRICAS (TOPO) -->
+                <div x-show="results" x-transition class="glass neumorphic rounded-3xl p-4">
+                    <h2 class="text-lg font-bold text-white mb-3">🎮 Controles da Simulação</h2>
+
+                    <!-- Clock e botões -->
+                    <div class="flex items-center justify-between mb-3">
+                        <div class="text-white font-bold text-lg">
+                            🕐 Ciclo: <span x-text="currentCycle?.clock || 0" class="text-2xl text-yellow-300"></span>
+                            <span class="text-sm opacity-75">/ <span x-text="results ? results.cycles.length - 1 : 0"></span></span>
+                        </div>
+
+                        <div class="flex gap-2">
+                            <button @click="stepBack()" :disabled="cycleIndex === 0"
+                                class="px-3 py-1 bg-blue-500 hover:bg-blue-600 text-white rounded-lg text-sm font-semibold disabled:opacity-30">
+                                ⏮ Anterior
+                            </button>
+                            <button @click="stepForward()" :disabled="cycleIndex === results.cycles.length - 1"
+                                class="px-3 py-1 bg-green-500 hover:bg-green-600 text-white rounded-lg text-sm font-semibold disabled:opacity-30">
+                                Próximo ⏭
+                            </button>
+                            <button @click="toggleAutoRun()" :disabled="cycleIndex === results.cycles.length - 1 && !autoRunActive"
+                                :class="autoRunActive ? 'bg-red-500 hover:bg-red-600' : 'bg-orange-500 hover:bg-orange-600'"
+                                class="px-3 py-1 text-white rounded-lg text-sm font-semibold disabled:opacity-30">
+                                <span x-text="autoRunActive ? '⏸ Pausar' : '⏯ Auto Executar'"></span>
+                            </button>
+                            <button @click="runToEnd()" :disabled="cycleIndex === results.cycles.length - 1"
+                                class="px-3 py-1 bg-purple-600 hover:bg-purple-700 text-white rounded-lg text-sm font-semibold disabled:opacity-30">
+                                ⏩ Executar Tudo
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Slider de ciclo -->
+                    <input type="range" x-model.number="cycleIndex" :max="results ? results.cycles.length - 1 : 0"
+                           class="w-full h-2 bg-white bg-opacity-20 rounded-lg appearance-none cursor-pointer mb-3">
+
+                    <!-- Controle de velocidade auto-execução -->
+                    <div class="flex items-center gap-3 mb-3">
+                        <label class="text-white text-sm font-semibold">Velocidade Auto-Execução:</label>
+                        <input type="range" x-model.number="autoRunSpeed" min="100" max="2000" step="100"
+                               class="flex-1 h-2 bg-white bg-opacity-20 rounded-lg appearance-none cursor-pointer">
+                        <span class="text-white text-sm font-mono" x-text="autoRunSpeed + 'ms'"></span>
+                    </div>
+
+                    <!-- MÉTRICAS (Dinâmicas por ciclo) -->
+                    <div class="bg-blue-100 rounded-xl p-3">
+                        <div class="grid grid-cols-5 gap-3 text-center">
+                            <div>
+                                <div class="text-2xl font-bold text-blue-900" x-text="currentCycle?.ipc?.toFixed(3) || '0.000'"></div>
+                                <div class="text-blue-700 text-xs font-semibold">IPC</div>
+                            </div>
+                            <div>
+                                <div class="text-2xl font-bold text-blue-900" x-text="currentCycle?.clock || 0"></div>
+                                <div class="text-blue-700 text-xs font-semibold">Ciclo Atual</div>
+                            </div>
+                            <div>
+                                <div class="text-2xl font-bold text-blue-900" x-text="currentCycle?.bubble_cycles || 0"></div>
+                                <div class="text-blue-700 text-xs font-semibold">Bolhas</div>
+                            </div>
+                            <div>
+                                <div class="text-2xl font-bold text-blue-900" x-text="currentCycle?.speculative_count || 0"></div>
+                                <div class="text-blue-700 text-xs font-semibold">Especulativas</div>
+                            </div>
+                            <div>
+                                <div class="text-2xl font-bold text-blue-900" x-text="currentCycle?.squashed_count || 0"></div>
+                                <div class="text-blue-700 text-xs font-semibold">Descartadas</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 2. TABELA DE INSTRUÇÕES (MEIO) -->
+                <div x-show="results" x-transition class="glass neumorphic rounded-3xl p-4">
+                    <h2 class="text-lg font-bold text-white mb-3">📋 Status das Instruções</h2>
+                    <div class="overflow-auto scrollbar-thin rounded-xl" style="max-height: 400px;">
+                        <table class="w-full text-xs">
+                            <thead class="sticky top-0 bg-white bg-opacity-30">
+                                <tr>
+                                    <th class="px-2 py-2 text-white font-bold">ID</th>
+                                    <th class="px-2 py-2 text-white font-bold">OP</th>
+                                    <th class="px-2 py-2 text-white font-bold">Dest</th>
+                                    <th class="px-2 py-2 text-white font-bold">Src1</th>
+                                    <th class="px-2 py-2 text-white font-bold">Src2</th>
+                                    <th class="px-2 py-2 text-white font-bold">Issue</th>
+                                    <th class="px-2 py-2 text-white font-bold">Exec Start</th>
+                                    <th class="px-2 py-2 text-white font-bold">Exec End</th>
+                                    <th class="px-2 py-2 text-white font-bold">Write</th>
+                                    <th class="px-2 py-2 text-white font-bold">Commit</th>
+                                    <th class="px-2 py-2 text-white font-bold">Estado</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <template x-for="instr in currentCycle?.instructions || []" :key="instr.id">
+                                    <tr :class="getStateClass(instr)" class="border-b border-white border-opacity-10">
+                                        <td class="px-2 py-2 text-center font-mono font-bold" x-text="instr.id"></td>
+                                        <td class="px-2 py-2 text-center font-mono font-bold" x-text="instr.op"></td>
+                                        <td class="px-2 py-2 text-center font-mono" x-text="instr.dest || '-'"></td>
+                                        <td class="px-2 py-2 text-center font-mono" x-text="instr.src1"></td>
+                                        <td class="px-2 py-2 text-center font-mono" x-text="instr.src2"></td>
+                                        <td class="px-2 py-2 text-center font-mono" x-text="instr.issue >= 0 ? instr.issue : '-'"></td>
+                                        <td class="px-2 py-2 text-center font-mono" x-text="instr.exec_start >= 0 ? instr.exec_start : '-'"></td>
+                                        <td class="px-2 py-2 text-center font-mono" x-text="instr.exec_end >= 0 ? instr.exec_end : '-'"></td>
+                                        <td class="px-2 py-2 text-center font-mono" x-text="instr.write >= 0 ? instr.write : '-'"></td>
+                                        <td class="px-2 py-2 text-center font-mono" x-text="instr.commit >= 0 ? instr.commit : '-'"></td>
+                                        <td class="px-2 py-2 text-center">
+                                            <span class="px-2 py-1 rounded-lg text-xs font-bold" x-text="getStateLabel(instr)"></span>
+                                        </td>
+                                    </tr>
+                                </template>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <!-- 3. RS + REGISTER FILE (BAIXO, 50/50) -->
+                <div x-show="results" x-transition class="grid grid-cols-2 gap-4">
+                    <!-- RESERVATION STATIONS (ESQUERDA) -->
+                    <div class="glass neumorphic rounded-3xl p-4">
+                        <h2 class="text-lg font-bold text-white mb-3">Estações de Reserva</h2>
+                        <div class="overflow-auto scrollbar-thin" style="max-height: 300px;">
+                            <table class="w-full text-xs">
+                                <thead class="sticky top-0 bg-white bg-opacity-30">
+                                    <tr>
+                                        <th class="px-2 py-1 text-white font-bold">Nome</th>
+                                        <th class="px-2 py-1 text-white font-bold">Op</th>
+                                        <th class="px-2 py-1 text-white font-bold">Vj</th>
+                                        <th class="px-2 py-1 text-white font-bold">Vk</th>
+                                        <th class="px-2 py-1 text-white font-bold">Qj</th>
+                                        <th class="px-2 py-1 text-white font-bold">Qk</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <template x-for="(stations, type) in currentCycle?.reservation_stations || {}" :key="type">
+                                        <template x-for="(rs, idx) in stations" :key="type + idx">
+                                            <tr :class="rs.busy ? 'bg-red-100' : 'bg-green-100'" class="border-b border-white border-opacity-10">
+                                                <td class="px-2 py-1 text-center font-mono text-xs" x-text="type.toUpperCase() + '_' + idx"></td>
+                                                <td class="px-2 py-1 text-center font-mono text-xs" x-text="rs.busy ? (rs.op || '-') : 'Livre'"></td>
+                                                <td class="px-2 py-1 text-center font-mono text-xs" x-text="rs.busy && rs.vj !== null ? rs.vj.toFixed(1) : '-'"></td>
+                                                <td class="px-2 py-1 text-center font-mono text-xs" x-text="rs.busy && rs.vk !== null ? rs.vk.toFixed(1) : '-'"></td>
+                                                <td class="px-2 py-1 text-center font-mono text-xs" x-text="rs.busy ? (rs.qj || '-') : '-'"></td>
+                                                <td class="px-2 py-1 text-center font-mono text-xs" x-text="rs.busy ? (rs.qk || '-') : '-'"></td>
+                                            </tr>
+                                        </template>
+                                    </template>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+
+                    <!-- REGISTER FILE (DIREITA) -->
+                    <div class="glass neumorphic rounded-3xl p-4">
+                        <h2 class="text-lg font-bold text-white mb-3">📝 Register File</h2>
+                        <div class="overflow-auto scrollbar-thin" style="max-height: 300px;">
+                            <table class="w-full text-xs">
+                                <thead class="sticky top-0 bg-white bg-opacity-30">
+                                    <tr>
+                                        <th class="px-2 py-1 text-white font-bold">Reg</th>
+                                        <th class="px-2 py-1 text-white font-bold">Valor</th>
+                                        <th class="px-2 py-1 text-white font-bold">Produtor</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <template x-for="reg in currentCycle?.register_file || []" :key="reg.name">
+                                        <tr class="bg-white bg-opacity-10 border-b border-white border-opacity-10">
+                                            <td class="px-2 py-1 text-center font-mono font-bold text-white" x-text="reg.name"></td>
+                                            <td class="px-2 py-1 text-center font-mono text-white" x-text="reg.value !== null ? reg.value.toFixed(1) : '0.0'"></td>
+                                            <td class="px-2 py-1 text-center font-mono text-white text-xs" x-text="reg.producer || '-'"></td>
+                                        </tr>
+                                    </template>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        function simulator() {
+            return {
+                program: `# Especulação
+ADD R2 R0 20
+ADD R3 R0 2
+ADD R5 R0 20
+BEQ 10 R2 R5
+ADD R10 R2 R2
+ADD R11 R2 R3
+ADD R12 R3 R3
+MUL R13 R2 R3
+ADD R14 R13 R2
+ADD R20 R2 R3`,
+                config: {
+                    rs_add: 3, rs_mult: 2, rs_store: 2, rs_branch: 1,
+                    latency_add: 2, latency_mul: 10, latency_div: 40,
+                    latency_load: 2, latency_store: 2, latency_branch: 1
+                },
+                examples: {
+                    basic: `ADD R1 R0 R0\nADD R2 R1 R1\nADD R3 R2 R2\nMUL R4 R3 R3`,
+                    speculation: `ADD R2 R0 20\nADD R3 R0 2\nADD R5 R0 20\nBEQ 10 R2 R5\nADD R10 R2 R2\nADD R11 R2 R3\nADD R12 R3 R3\nMUL R13 R2 R3\nADD R14 R13 R2\nADD R20 R2 R3`
+                },
+                results: null,
+                cycleIndex: 0,
+                isRunning: false,
+                errorMessage: null,
+                selectedExample: '',
+                autoRunActive: false,
+                autoRunSpeed: 500,
+                autoRunTimer: null,
+
+                get currentCycle() {
+                    return this.results?.cycles?.[this.cycleIndex] || null;
+                },
+
+                loadExample() {
+                    if (this.selectedExample && this.examples[this.selectedExample]) {
+                        this.program = this.examples[this.selectedExample];
+                        this.selectedExample = '';
+                    }
+                },
+
+                stepBack() {
+                    if (this.cycleIndex > 0) {
+                        this.cycleIndex--;
+                    }
+                },
+
+                stepForward() {
+                    if (this.cycleIndex < this.results.cycles.length - 1) {
+                        this.cycleIndex++;
+                    }
+                },
+
+                toggleAutoRun() {
+                    if (this.autoRunActive) {
+                        // Pausar auto-execução
+                        this.autoRunActive = false;
+                        if (this.autoRunTimer) {
+                            clearInterval(this.autoRunTimer);
+                            this.autoRunTimer = null;
+                        }
+                    } else {
+                        // Iniciar auto-execução
+                        this.autoRunActive = true;
+                        this.startAutoRun();
+                    }
+                },
+
+                startAutoRun() {
+                    if (this.autoRunTimer) {
+                        clearInterval(this.autoRunTimer);
+                    }
+                    this.autoRunTimer = setInterval(() => {
+                        if (this.cycleIndex < this.results.cycles.length - 1) {
+                            this.cycleIndex++;
+                        } else {
+                            // Chegou no final, pausar automaticamente
+                            this.toggleAutoRun();
+                        }
+                    }, this.autoRunSpeed);
+                },
+
+                init() {
+                    // Watch para mudanças na velocidade durante auto-execução
+                    this.$watch('autoRunSpeed', () => {
+                        if (this.autoRunActive) {
+                            this.startAutoRun();
+                        }
+                    });
+                },
+
+                runToEnd() {
+                    this.cycleIndex = this.results.cycles.length - 1;
+                },
+
+                async runSimulation() {
+                    this.isRunning = true;
+                    this.results = null;
+                    this.errorMessage = null;
+                    // Parar auto-execução se estiver rodando
+                    if (this.autoRunActive) {
+                        this.toggleAutoRun();
+                    }
+
+                    try {
+                        const response = await fetch('/api/simulate/', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ program: this.program, config: this.config })
+                        });
+
+                        const data = await response.json();
+
+                        if (data.success) {
+                            this.results = data;
+                            this.cycleIndex = 0;
+                        } else {
+                            this.errorMessage = data.error || 'Erro desconhecido';
+                        }
+                    } catch (error) {
+                        this.errorMessage = 'Erro: ' + error.message;
+                    } finally {
+                        this.isRunning = false;
+                    }
+                },
+
+                resetSimulation() {
+                    // Parar auto-execução se estiver rodando
+                    if (this.autoRunActive) {
+                        this.toggleAutoRun();
+                    }
+                    this.results = null;
+                    this.cycleIndex = 0;
+                    this.errorMessage = null;
+                },
+
+                getStateClass(instr) {
+                    if (instr.is_squashed) return 'state-squashed';
+                    if (instr.is_speculative && instr.commit === -1) return 'state-speculative';
+                    return `state-${instr.state}`;
+                },
+
+                getStateLabel(instr) {
+                    if (instr.is_squashed) return 'DESCARTADA';
+                    if (instr.is_speculative && instr.commit === -1) return 'ESPECULATIVA';
+                    const labels = {
+                        'waiting': 'Aguardando', 'issued': 'Issued', 'executing': 'Executando',
+                        'write': 'Write', 'committed': 'Committed'
+                    };
+                    return labels[instr.state] || instr.state;
+                }
+            };
+        }
+    </script>
+</body>
+</html>
