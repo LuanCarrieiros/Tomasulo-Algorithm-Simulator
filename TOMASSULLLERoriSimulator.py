@@ -245,13 +245,33 @@ class TOMASSULLLERoriSimulator:
                         instr.set_current_latency(instr.get_current_latency() - 1)
                         if instr.get_current_latency() == 0:
                             instr.set_end_exec_cycle(self.current_clock)
-                            res = 0.0  # Placeholder para o resultado
 
-                            # Lógica para branches - SEMPRE TOMA O SALTO nesta simulação
-                            if (rs.get_op() in [Op.BEQ, Op.BNE]) and not instr.is_branch_resolved():
-                                instr.set_branch_taken(True)
-                                instr.set_branch_resolved(True)
-                                res = 1.0  # Simboliza branch tomado
+                            # Calcula o resultado baseado na operação
+                            res = 0.0
+                            vj = rs.get_Vj() if rs.get_Vj() is not None else 0.0
+                            vk = rs.get_Vk() if rs.get_Vk() is not None else 0.0
+
+                            if rs.get_op() == Op.ADD:
+                                res = vj + vk
+                            elif rs.get_op() == Op.SUB:
+                                res = vj - vk
+                            elif rs.get_op() == Op.MUL:
+                                res = vj * vk
+                            elif rs.get_op() == Op.DIV:
+                                res = vj / vk if vk != 0 else 0.0
+                            elif rs.get_op() == Op.LD:
+                                # LOAD: assume que src2 é o endereço, retorna valor simulado
+                                res = vk  # Simplificação: retorna o "endereço" como valor
+                            elif rs.get_op() in [Op.BEQ, Op.BNE]:
+                                # Lógica para branches - SEMPRE TOMA O SALTO nesta simulação
+                                if not instr.is_branch_resolved():
+                                    instr.set_branch_taken(True)
+                                    instr.set_branch_resolved(True)
+                                    res = 1.0  # Simboliza branch tomado
+                            elif rs.get_op() == Op.ST:
+                                # STORE: valor a ser armazenado
+                                res = vj
+
                             rs.set_result(res)
                 # Removido: contagem de bolhas por data hazard (comportamento normal do Tomasulo)
 
