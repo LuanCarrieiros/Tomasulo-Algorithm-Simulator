@@ -137,13 +137,13 @@
                             <option value="" style="background-color: #667eea; color: white;">Exemplos...</option>
                             <option value="parallelism" style="background-color: #667eea; color: white;">Paralelismo Independente</option>
                             <option value="div_latency" style="background-color: #667eea; color: white;">DIV com Latência Alta</option>
-                            <option value="saturate_rs" style="background-color: #667eea; color: white;">Saturar RS</option>
+                            <option value="saturate_rs" style="background-color: #667eea; color: white;">Operações de Memória (LD/ST)</option>
                             <option value="speculation" style="background-color: #667eea; color: white;">Especulação Completa</option>
                         </select>
                     </div>
                     <textarea
                         x-model="program"
-                        rows="20"
+                        rows="18"
                         class="w-full p-3 rounded-xl neumorphic-inset bg-white bg-opacity-40 text-gray-900 font-mono text-xs scrollbar-thin"
                         placeholder="# Digite as instruções
 ADD R1 R0 R0
@@ -291,7 +291,7 @@ BEQ 5 R1 R2"></textarea>
                     <!-- RESERVATION STATIONS (ESQUERDA) -->
                     <div class="glass neumorphic rounded-3xl p-4">
                         <h2 class="text-lg font-bold text-white mb-3">Estações de Reserva</h2>
-                        <div class="overflow-auto scrollbar-thin" style="max-height: 300px;">
+                        <div class="overflow-auto scrollbar-thin" style="max-height: 260px;">
                             <table class="w-full text-xs">
                                 <thead class="sticky top-0 bg-white bg-opacity-30">
                                     <tr>
@@ -301,6 +301,7 @@ BEQ 5 R1 R2"></textarea>
                                         <th class="px-2 py-1 text-white font-bold">Vk</th>
                                         <th class="px-2 py-1 text-white font-bold">Qj</th>
                                         <th class="px-2 py-1 text-white font-bold">Qk</th>
+                                        <th class="px-2 py-1 text-white font-bold">Ciclos</th>
                                     </tr>
                                 </thead>
                                 <tbody>
@@ -313,6 +314,7 @@ BEQ 5 R1 R2"></textarea>
                                                 <td class="px-2 py-1 text-center font-mono text-xs" x-text="rs.busy && rs.vk !== null ? rs.vk.toFixed(1) : '-'"></td>
                                                 <td class="px-2 py-1 text-center font-mono text-xs" x-text="rs.busy ? (rs.qj || '-') : '-'"></td>
                                                 <td class="px-2 py-1 text-center font-mono text-xs" x-text="rs.busy ? (rs.qk || '-') : '-'"></td>
+                                                <td class="px-2 py-1 text-center font-mono text-xs font-bold text-orange-600" x-text="rs.busy && rs.cycles !== null ? rs.cycles : '-'"></td>
                                             </tr>
                                         </template>
                                     </template>
@@ -324,7 +326,7 @@ BEQ 5 R1 R2"></textarea>
                     <!-- REGISTER FILE (DIREITA) -->
                     <div class="glass neumorphic rounded-3xl p-4">
                         <h2 class="text-lg font-bold text-white mb-3">📝 Register File</h2>
-                        <div class="overflow-auto scrollbar-thin" style="max-height: 300px;">
+                        <div class="overflow-auto scrollbar-thin" style="max-height: 260px;">
                             <table class="w-full text-xs">
                                 <thead class="sticky top-0 bg-white bg-opacity-30">
                                     <tr>
@@ -497,18 +499,28 @@ ADD R4 R3 R0    # Espera DIV terminar
 MUL R5 R4 R2    # Depende de R4
 ADD R6 R5 R3    # Depende de R5`,
 
-                    saturate_rs: `# Saturar Reservation Stations
-# 8 ADDs independentes (mais que as 3 RSs padrão)
-# ADDs 4-8 vão esperar RS livre (bolhas!)
+                    saturate_rs: `# Operações de Memória (LD/ST)
+# Demonstra Load/Store com dependências
+# LD dest base offset => dest = Mem[base + offset]
+# ST src base offset  => Mem[base + offset] = src
 
-ADD R1 R0 1
-ADD R2 R0 2
-ADD R3 R0 3
-ADD R4 R0 4     # Espera RS livre
-ADD R5 R0 5     # Espera RS livre
-ADD R6 R0 6     # Espera RS livre
-ADD R7 R0 7     # Espera RS livre
-ADD R8 R0 8     # Espera RS livre`,
+# Setup: ponteiros de memória
+ADD R10 R0 100   # R10 = endereço base array A
+ADD R11 R0 200   # R11 = endereço base array B
+
+# LOADs: carregam valores da memória
+LD R1 R10 0      # R1 = Mem[100 + 0] = A[0]
+LD R2 R10 4      # R2 = Mem[100 + 4] = A[1]
+LD R3 R11 0      # R3 = Mem[200 + 0] = B[0]
+LD R4 R11 4      # R4 = Mem[200 + 4] = B[1]
+
+# Operações: soma vetorial (A[i] + B[i])
+ADD R5 R1 R3     # R5 = A[0] + B[0]
+ADD R6 R2 R4     # R6 = A[1] + B[1]
+
+# STORES: salvam resultados na memória
+ST R5 R10 8      # Mem[100 + 8] = R5
+ST R6 R10 12     # Mem[100 + 12] = R6`,
 
                     speculation: `# Especulação Completa com Branch
 # Setup inicial
