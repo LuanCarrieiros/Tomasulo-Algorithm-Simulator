@@ -190,28 +190,32 @@ def capture_cycle_state(simulator):
                  'vj': rs.get_Vj() if rs.get_Vj() is not None else 0.0,
                  'vk': rs.get_Vk() if rs.get_Vk() is not None else 0.0,
                  'qj': rs.get_Qj(),
-                 'qk': rs.get_Qk()}
+                 'qk': rs.get_Qk(),
+                 'cycles': rs.get_instruction().get_current_latency() if rs.is_busy() and rs.get_instruction() else None}
                 for rs in simulator.get_rs_add()],
         'mult': [{'busy': rs.is_busy(),
                   'op': rs.get_op().value if rs.is_busy() and rs.get_op() else None,
                   'vj': rs.get_Vj() if rs.get_Vj() is not None else 0.0,
                   'vk': rs.get_Vk() if rs.get_Vk() is not None else 0.0,
                   'qj': rs.get_Qj(),
-                  'qk': rs.get_Qk()}
+                  'qk': rs.get_Qk(),
+                  'cycles': rs.get_instruction().get_current_latency() if rs.is_busy() and rs.get_instruction() else None}
                  for rs in simulator.get_rs_mult()],
         'store': [{'busy': rs.is_busy(),
                    'op': rs.get_op().value if rs.is_busy() and rs.get_op() else None,
                    'vj': rs.get_Vj() if rs.get_Vj() is not None else 0.0,
                    'vk': rs.get_Vk() if rs.get_Vk() is not None else 0.0,
                    'qj': rs.get_Qj(),
-                   'qk': rs.get_Qk()}
+                   'qk': rs.get_Qk(),
+                   'cycles': rs.get_instruction().get_current_latency() if rs.is_busy() and rs.get_instruction() else None}
                   for rs in simulator.get_rs_store()],
         'branch': [{'busy': rs.is_busy(),
                     'op': rs.get_op().value if rs.is_busy() and rs.get_op() else None,
                     'vj': rs.get_Vj() if rs.get_Vj() is not None else 0.0,
                     'vk': rs.get_Vk() if rs.get_Vk() is not None else 0.0,
                     'qj': rs.get_Qj(),
-                    'qk': rs.get_Qk()}
+                    'qk': rs.get_Qk(),
+                    'cycles': rs.get_instruction().get_current_latency() if rs.is_busy() and rs.get_instruction() else None}
                    for rs in simulator.get_rs_branch()]
     }
 
@@ -219,7 +223,16 @@ def capture_cycle_state(simulator):
     register_file_state = []
     reg_file = simulator.get_register_file()
     registers = reg_file.get_registers()
-    for reg_name in sorted(registers.keys()):
+
+    # Ordena registradores: em uso primeiro, depois ordem numérica (R0, R1, R2... R10, R11...)
+    def sort_registers(reg_name):
+        # Extrai o número do registrador (ex: "R10" -> 10)
+        num = int(reg_name[1:]) if reg_name[1:].isdigit() else 0
+        # Registradores com produtor (em uso) vêm primeiro (False < True)
+        in_use = registers[reg_name].get_producer_tag() is None
+        return (in_use, num)
+
+    for reg_name in sorted(registers.keys(), key=sort_registers):
         status = registers[reg_name]
         register_file_state.append({
             'name': reg_name,
