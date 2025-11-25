@@ -67,12 +67,18 @@ def simulate(request):
                 cycles_data.append(cycle_state)
 
             # Métricas finais
+            total_instructions = len(instructions)
+            committed = sum(1 for i in instructions if i.get_commit_cycle() != -1 and not i.is_squashed())
+
             metrics = {
                 'ipc': simulator.calculate_ipc(),
                 'total_cycles': simulator.get_current_clock(),
                 'bubble_cycles': simulator.get_bubble_cycles(),
                 'total_squashed': simulator.get_total_squashed(),
-                'committed_instructions': sum(1 for i in instructions if i.get_commit_cycle() != -1 and not i.is_squashed())
+                'committed_instructions': committed,
+                'total_instructions': total_instructions,
+                'max_speculative': simulator.max_speculative_count,
+                'efficiency': (committed / total_instructions * 100) if total_instructions > 0 else 0
             }
 
             return JsonResponse({
