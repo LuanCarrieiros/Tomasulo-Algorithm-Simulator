@@ -20,7 +20,7 @@ Simulador didático web do **Algoritmo de Tomasulo** com suporte a:
 ## 📋 Requisitos
 
 - Python 3.10 ou superior
-- Django 5.2.6
+- Django 5.2.6 (Não precisa preocupar, incluso no requirements.txt)
 - Navegador web moderno (Chrome, Firefox, Edge, Safari)
 
 ## 🚀 Como Executar
