@@ -25,19 +25,33 @@ Simulador didático web do **Algoritmo de Tomasulo** com suporte a:
 
 ## 🚀 Como Executar
 
-### 1. Instalar Dependências
+### 1. Criar Ambiente Virtual (Recomendado)
+
+**Windows:**
+```cmd
+python -m venv venv
+venv\Scripts\activate
+```
+
+**Linux/Mac:**
+```bash
+python3 -m venv venv
+source venv/bin/activate
+```
+
+### 2. Instalar Dependências
 
 ```bash
 pip install -r requirements.txt
 ```
 
-### 2. Iniciar o Servidor
+### 3. Iniciar o Servidor
 
 ```bash
 python manage.py runserver
 ```
 
-### 3. Acessar a Interface
+### 4. Acessar a Interface
 
 Abra seu navegador e acesse:
 ```
